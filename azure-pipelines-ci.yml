@@ -1,139 +1,62 @@
 trigger:
-  branches:
-    include:
-      - main
-      - develop
-  paths:
-    include:
-      - '*.tf'
-      - '*.tfvars'
-
-pool:
-  vmImage: 'ubuntu-latest'
+- main
 
 variables:
-  - name: terraformVersion
-    value: '1.6.0'
-  - name: workingDirectory
-    value: '$(System.DefaultWorkingDirectory)'
+  location: 'East US'
+  environment: 'dev'
+  rg_name: '$(environment)-rg'
+  app_service_plan_name: '$(environment)-asp'
+  app_service_tier: 'Standard'
+  app_service_size: 'S1'
+  app_service_name: '$(environment)-app'
 
 stages:
-  - stage: TerraformCI
-    displayName: 'Terraform CI - Plan'
-    jobs:
-      - job: TerraformPlan
-        displayName: 'Terraform Plan'
-        steps:
-          - task: TerraformInstaller@0
-            displayName: 'Install Terraform'
-            inputs:
-              terraformVersion: $(terraformVersion)
+- stage: Terraform_CI
+  displayName: 'Terraform CI'
+  jobs:
+  - job: Terraform
+    displayName: 'Terraform Init, Format, Validate, Plan'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '3.x'
 
-          - task: AzureCLI@2
-            displayName: 'Azure Authentication'
-            inputs:
-              azureSubscription: '$(azureServiceConnection)'
-              scriptType: 'bash'
-              scriptLocation: 'inlineScript'
-              inlineScript: |
-                echo "Authenticated to Azure"
-                az account show
+    - script: |
+        curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+        sudo apt-add-repository "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+        sudo apt-get update && sudo apt-get install terraform -y
+      displayName: 'Install Terraform'
 
-          - script: |
-              cd $(workingDirectory)
-              terraform init \
-                -backend-config="resource_group_name=$(tfStateResourceGroup)" \
-                -backend-config="storage_account_name=$(tfStateStorageAccount)" \
-                -backend-config="container_name=$(tfStateContainer)" \
-                -backend-config="key=$(environment).terraform.tfstate"
-            displayName: 'Terraform Init'
-            env:
-              ARM_CLIENT_ID: $(ARM_CLIENT_ID)
-              ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
-              ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
-              ARM_TENANT_ID: $(ARM_TENANT_ID)
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: '<YOUR_SERVICE_CONNECTION>'
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          echo "Azure login successful"
+      displayName: 'Azure Login'
 
-          - script: |
-              cd $(workingDirectory)
-              terraform fmt -check -recursive
-            displayName: 'Terraform Format Check'
-            continueOnError: false
+    - script: |
+        terraform init
+      displayName: 'Terraform Init'
 
-          - script: |
-              cd $(workingDirectory)
-              
-              if [ "$(environment)" == "prod" ]; then
-                echo "Running strict validation for production environment"
-                terraform validate
-                
-                # Additional strict checks for production
-                if [ $? -ne 0 ]; then
-                  echo "##vso[task.logissue type=error]Terraform validation failed for production environment"
-                  exit 1
-                fi
-                
-                # Check for warnings in plan
-                echo "Production environment - warnings will cause failure"
-              else
-                echo "Running standard validation for $(environment) environment"
-                terraform validate || {
-                  echo "##vso[task.logissue type=warning]Terraform validation has warnings for $(environment)"
-                  echo "Continuing as this is not production environment"
-                }
-              fi
-            displayName: 'Terraform Validate (Environment-Specific)'
-            env:
-              ARM_CLIENT_ID: $(ARM_CLIENT_ID)
-              ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
-              ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
-              ARM_TENANT_ID: $(ARM_TENANT_ID)
+    - script: |
+        terraform fmt -check
+      displayName: 'Terraform Format'
 
-          - script: |
-              cd $(workingDirectory)
-              terraform plan \
-                -var-file="terraform.$(environment).tfvars" \
-                -out=tfplan \
-                -detailed-exitcode
-              
-              PLAN_EXIT_CODE=$?
-              
-              if [ $PLAN_EXIT_CODE -eq 0 ]; then
-                echo "No changes detected"
-              elif [ $PLAN_EXIT_CODE -eq 2 ]; then
-                echo "Changes detected in plan"
-              else
-                echo "##vso[task.logissue type=error]Terraform plan failed"
-                exit 1
-              fi
-              
-              # Additional validation for production
-              if [ "$(environment)" == "prod" ]; then
-                echo "Performing additional production validation checks..."
-                terraform show -json tfplan > tfplan.json
-                
-                # Example: Check for any destroy operations in production
-                DESTROY_COUNT=$(cat tfplan.json | grep -c '"delete"' || true)
-                if [ $DESTROY_COUNT -gt 0 ]; then
-                  echo "##vso[task.logissue type=warning]Warning: Plan contains $DESTROY_COUNT resource deletions"
-                fi
-              fi
-            displayName: 'Terraform Plan'
-            env:
-              ARM_CLIENT_ID: $(ARM_CLIENT_ID)
-              ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
-              ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
-              ARM_TENANT_ID: $(ARM_TENANT_ID)
+    - script: |
+        if [ "$(environment)" = "prod" ]; then
+          terraform validate -json | jq -e '.diagnostics[] | select(.severity=="warning") | .summary' && exit 1 || terraform validate
+        else
+          terraform validate
+        fi
+      displayName: 'Terraform Validate'
 
-          - task: PublishPipelineArtifact@1
-            displayName: 'Publish Terraform Plan'
-            inputs:
-              targetPath: '$(workingDirectory)/tfplan'
-              artifact: 'terraform-plan-$(environment)'
-              publishLocation: 'pipeline'
+    - script: |
+        terraform plan -out=tfplan
+      displayName: 'Terraform Plan'
 
-          - task: PublishPipelineArtifact@1
-            displayName: 'Publish Terraform Files'
-            inputs:
-              targetPath: '$(workingDirectory)'
-              artifact: 'terraform-files-$(environment)'
-              publishLocation: 'pipeline'
+    - publish: tfplan
+      artifact: terraform_plan
