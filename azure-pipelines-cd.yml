@@ -66,7 +66,7 @@ stages:
               export ARM_TENANT_ID=2a731c61-a2b2-4661-8409-5b861cf40d0c
 
               echo "Exporting TF_VARs..."
-              export TF_VAR_resource_group_name="pradeep-rg"
+              export TF_VAR_resource_group_name="pradeep-rg-auto"
               export TF_VAR_location="eastus"
               export TF_VAR_app_service_plan_name="pradeep-plan"
               export TF_VAR_app_service_plan_tier="Standard"
