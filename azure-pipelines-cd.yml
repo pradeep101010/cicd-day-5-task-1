@@ -28,7 +28,7 @@ stages:
             inputs:
               buildType: 'specific'                  # fixed
               project: '$(System.TeamProjectId)'
-              pipeline: 'pradeep-new-cicd-pipeline'
+              pipeline: 'pradeep101010.pradeep-new-cicd-pipeline'
               runVersion: 'latest'                   # fetch latest successful run
               artifact: 'terraform'
               path: '$(Pipeline.Workspace)/terraform'
