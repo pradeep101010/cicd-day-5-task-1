@@ -48,7 +48,7 @@ stages:
                 az account show
 
           ############################################
-          # Download full terraform configuration from CI
+          # Download full terraform folder from CI
           ############################################
           - task: DownloadPipelineArtifact@2
             displayName: 'Download terraform folder'
@@ -78,7 +78,7 @@ stages:
               echo "Initializing Terraform..."
               terraform init -input=false -upgrade
 
-              echo "Applying Terraform plan with ci.tfvars..."
+              echo "Applying Terraform plan using ci.tfvars..."
               terraform apply -input=false -var-file=ci.tfvars
             displayName: 'Terraform Apply'
             env:
