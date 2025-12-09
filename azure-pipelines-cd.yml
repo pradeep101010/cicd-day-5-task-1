@@ -26,17 +26,13 @@ stages:
         deploy:
           steps:
 
-          ############################################
           # Install Terraform
-          ############################################
           - task: TerraformInstaller@1
             displayName: 'Install Terraform'
             inputs:
               terraformVersion: '1.5.7'
 
-          ############################################
-          # Download full terraform folder from CI
-          ############################################
+          # Download terraform folder from CI
           - task: DownloadPipelineArtifact@2
             displayName: 'Download terraform folder'
             inputs:
@@ -48,62 +44,33 @@ stages:
               artifact: 'terraform'
               path: '$(Pipeline.Workspace)/terraform'
 
-          ############################################
           # Fix permissions for provider binaries
-          ############################################
           - script: |
               echo "Fixing permissions for Terraform provider binaries..."
               chmod -R +x $(Pipeline.Workspace)/terraform/.terraform/providers/
             displayName: 'Fix Terraform provider permissions'
 
-          ############################################
-          # Set Azure Service Principal Environment Variables
-          ############################################
+          # Terraform Apply using Azure Service Principal environment variables
           - task: AzureCLI@2
-            displayName: 'Set Azure SP environment variables'
+            displayName: 'Terraform Apply'
             inputs:
               azureSubscription: 'pradeep-last-sc'
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
-                echo "Setting environment variables for Terraform Azure provider..."
-                echo "ARM_CLIENT_ID=$SERVICEPRINCIPALID"
-                echo "ARM_CLIENT_SECRET=$SERVICEPRINCIPALKEY"
-                echo "ARM_SUBSCRIPTION_ID=$SUBSCRIPTIONID"
-                echo "ARM_TENANT_ID=$TENANTID"
+                cd $(Pipeline.Workspace)/terraform
 
-                export ARM_CLIENT_ID=$SERVICEPRINCIPALID
-                export ARM_CLIENT_SECRET=$SERVICEPRINCIPALKEY
-                export ARM_SUBSCRIPTION_ID=$SUBSCRIPTIONID
-                export ARM_TENANT_ID=$TENANTID
-            env:
-              SERVICEPRINCIPALID: $(servicePrincipalId)
-              SERVICEPRINCIPALKEY: $(servicePrincipalKey)
-              SUBSCRIPTIONID: $(subscriptionId)
-              TENANTID: $(tenantId)
+                echo "Initializing Terraform..."
+                terraform init -input=false -upgrade
 
-          ############################################
-          # Apply Terraform plan with hardcoded values
-          ############################################
-          - script: |
-              cd $(Pipeline.Workspace)/terraform
-
-              echo "Initializing Terraform..."
-              terraform init -input=false -upgrade
-
-              echo "Applying Terraform plan with hardcoded values..."
-              terraform apply -input=false \
-                -var="resource_group_name=pradeep-rg" \
-                -var="location=eastus" \
-                -var="app_service_plan_name=pradeep-plan" \
-                -var="app_service_plan_tier=Standard" \
-                -var="app_service_plan_size=S1" \
-                -var="app_service_name=pradeep-app" \
-                -var="linux_fx_version=DOTNETCORE|7.0"
-            displayName: 'Terraform Apply'
+                echo "Applying Terraform plan with hardcoded values..."
+                terraform apply -input=false \
+                  -var="resource_group_name=pradeep-rg" \
+                  -var="location=eastus" \
+                  -var="app_service_plan_name=pradeep-plan" \
+                  -var="app_service_plan_tier=Standard" \
+                  -var="app_service_plan_size=S1" \
+                  -var="app_service_name=pradeep-app" \
+                  -var="linux_fx_version=DOTNETCORE|7.0"
             env:
               TF_IN_AUTOMATION: '1'
-              ARM_CLIENT_ID: $(servicePrincipalId)
-              ARM_CLIENT_SECRET: $(servicePrincipalKey)
-              ARM_SUBSCRIPTION_ID: $(subscriptionId)
-              ARM_TENANT_ID: $(tenantId)
