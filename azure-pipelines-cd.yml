@@ -3,7 +3,7 @@ pr: none
 
 resources:
   pipelines:
-    - pipeline: ciPipeline          
+    - pipeline: ciPipeline
       source: pradeep101010.pradeep-new-cicd-pipeline
       trigger:
         branches:
@@ -32,20 +32,29 @@ stages:
             inputs:
               terraformVersion: '1.5.7'
 
-          # Azure authentication using same service connection used in CI
+          # Azure login
           - task: AzureCLI@2
             displayName: 'Azure Login'
             inputs:
               azureSubscription: 'pradeep-last-sc'
               scriptType: bash
               scriptLocation: inlineScript
-              inlineScript: |
-                echo "Logged into Azure:"
-                az account show
+              inlineScript: az account show
 
           ############################################
-          # DOWNLOAD ARTIFACTS FROM CI PIPELINE RUN #
+          # DOWNLOAD FULL TERRAFORM CONFIGURATION    #
           ############################################
+
+          - task: DownloadPipelineArtifact@2
+            displayName: "Download Terraform configuration"
+            inputs:
+              buildType: "specific"
+              project: "$(System.TeamProjectId)"
+              pipeline: "$(resources.pipeline.ciPipeline.pipelineId)"
+              runVersion: "specific"
+              runId: "$(resources.pipeline.ciPipeline.runId)"
+              artifact: "terraform"        # This must be published from CI
+              path: "$(Pipeline.Workspace)/terraform"
 
           - task: DownloadPipelineArtifact@2
             displayName: "Download tfplan binary"
@@ -58,35 +67,12 @@ stages:
               artifact: "tfplan"
               path: "$(Pipeline.Workspace)/tfplan"
 
-          - task: DownloadPipelineArtifact@2
-            displayName: "Download plan json"
-            inputs:
-              buildType: "specific"
-              project: "$(System.TeamProjectId)"
-              pipeline: "$(resources.pipeline.ciPipeline.pipelineId)"
-              runVersion: "specific"
-              runId: "$(resources.pipeline.ciPipeline.runId)"
-              artifact: "tfplan_json"
-              path: "$(Pipeline.Workspace)/tfplan_json"
-
-          - task: DownloadPipelineArtifact@2
-            displayName: "Download plan log"
-            inputs:
-              buildType: "specific"
-              project: "$(System.TeamProjectId)"
-              pipeline: "$(resources.pipeline.ciPipeline.pipelineId)"
-              runVersion: "specific"
-              runId: "$(resources.pipeline.ciPipeline.runId)"
-              artifact: "planlog"
-              path: "$(Pipeline.Workspace)/planlog"
-
           ############################################
-          # RECREATE TF VARIABLES USED IN CI         #
+          # RECREATE TF VARIABLES                     #
           ############################################
 
           - script: |
-              echo "Recreating Terraform variables used in CI..."
-
+              echo "Setting Terraform variables..."
               export TF_VAR_resource_group_name="pradeep-rg"
               export TF_VAR_location="eastus"
               export TF_VAR_app_service_plan_name="pradeep-plan"
@@ -95,23 +81,19 @@ stages:
               export TF_VAR_app_service_name="pradeep-app"
               export TF_VAR_linux_fx_version="DOTNETCORE|7.0"
 
-              # Recreate ci.tfvars
-              echo 'tags = {"env":"dev","owner":"pradeep"}' > $(Pipeline.Workspace)/tfplan/ci.tfvars
-
-              echo "Previewing plan changes..."
-              jq '.resource_changes[]? | {type:.type, name:.name, action:.change.actions}' \
-                 $(Pipeline.Workspace)/tfplan_json/tfplan.json || true
-            displayName: "Recreate TF vars & preview plan"
+              # ci.tfvars
+              echo 'tags = {"env":"dev","owner":"pradeep"}' > $(Pipeline.Workspace)/terraform/ci.tfvars
+            displayName: "Set TF_VARs"
 
           ############################################
           # APPLY TERRAFORM PLAN                      #
           ############################################
 
           - script: |
-              cd $(Pipeline.Workspace)/tfplan
+              cd $(Pipeline.Workspace)/terraform
               terraform init -input=false
               echo "Applying Terraform plan..."
-              terraform apply -input=false tfplan.binary
+              terraform apply -input=false $(Pipeline.Workspace)/tfplan/tfplan.binary
             displayName: "Terraform Apply"
             env:
               TF_IN_AUTOMATION: "1"
