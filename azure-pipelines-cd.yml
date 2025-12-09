@@ -62,7 +62,7 @@ stages:
               path: '$(Pipeline.Workspace)/terraform'
 
           ############################################
-          # Recreate TF_VARs (optional, if needed)
+          # Recreate TF_VARs (optional)
           ############################################
           - script: |
               echo "Setting Terraform variables..."
@@ -74,6 +74,14 @@ stages:
               export TF_VAR_app_service_name="pradeep-app"
               export TF_VAR_linux_fx_version="DOTNETCORE|7.0"
             displayName: 'Set TF_VARs'
+
+          ############################################
+          # Fix permissions for provider binaries
+          ############################################
+          - script: |
+              echo "Fixing permissions for Terraform provider binaries..."
+              chmod -R +x $(Pipeline.Workspace)/terraform/.terraform/providers/
+            displayName: 'Fix Terraform provider permissions'
 
           ############################################
           # Apply the Terraform plan
