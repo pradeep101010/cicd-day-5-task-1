@@ -26,7 +26,7 @@ stages:
           - task: DownloadPipelineArtifact@2
             displayName: 'Download terraform folder'
             inputs:
-              buildType: 'specific'                
+              buildType: 'specific'
               project: '$(System.TeamProjectId)'
               pipeline: 'pradeep101010.pradeep-new-cicd-pipeline'
               runVersion: 'specific'
@@ -85,7 +85,7 @@ stages:
               chmod -R +x $(Pipeline.Workspace)/terraform/.terraform/providers/
             displayName: 'Fix Terraform provider permissions'
 
-          # Terraform init & apply using MSI
+          # Terraform init & apply using MSI (fixed)
           - script: |
               cd $(Pipeline.Workspace)/terraform
 
@@ -93,7 +93,7 @@ stages:
               terraform init -input=false -upgrade
 
               echo "Applying Terraform plan..."
-              terraform apply -input=false -var-file=ci.tfvars tfplan.binary
+              terraform apply -input=false tfplan.binary
             displayName: 'Terraform Apply via MSI'
             env:
               TF_IN_AUTOMATION: '1'
