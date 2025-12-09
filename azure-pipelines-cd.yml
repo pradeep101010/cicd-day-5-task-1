@@ -2,12 +2,12 @@ trigger: none
 pr: none
 
 stages:
-- stage: Deploy
-  displayName: CD - Deploy Terraform Plan
+- stage: Terraform_CD
+  displayName: CD - Apply Terraform Plan
   jobs:
   - deployment: ApplyPlan
     displayName: Apply Terraform Plan
-    environment: 'dev-env'     # static since you're hardcoding anyway
+    environment: 'dev-env'
     pool:
       vmImage: 'ubuntu-latest'
 
@@ -16,35 +16,35 @@ stages:
         deploy:
           steps:
 
-          # Install Terraform (same as CI)
+          # Install Terraform
           - task: TerraformInstaller@1
             displayName: 'Install Terraform'
             inputs:
               terraformVersion: '1.5.7'
 
-          # Login to Azure using SAME service connection as CI
+          # Azure authentication using same service connection used in CI
           - task: AzureCLI@2
-            displayName: 'Authenticate to Azure'
+            displayName: 'Azure Login'
             inputs:
               azureSubscription: 'pradeep-last-sc'
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
-                echo "Logged into Azure subscription:"
+                echo "Logged into Azure:"
                 az account show
 
-          # Download plan artifacts generated in CI
+          # Download artifacts created in CI
           - download: current
             artifact: tfplan
-            displayName: 'Download tfplan artifact (binary)'
+            displayName: 'Download binary plan'
 
           - download: current
             artifact: tfplan_json
-            displayName: 'Download tfplan JSON'
+            displayName: 'Download JSON plan'
 
-          # Preview plan + recreate TF Vars
+          # Recreate same TF_VARs used in CI
           - script: |
-              echo "Recreating TF_VARs..."
+              echo "Recreating CI Terraform variables..."
 
               export TF_VAR_resource_group_name="pradeep-rg"
               export TF_VAR_location="eastus"
@@ -54,20 +54,22 @@ stages:
               export TF_VAR_app_service_name="pradeep-app"
               export TF_VAR_linux_fx_version="DOTNETCORE|7.0"
 
-              echo 'tags = {"env":"dev","owner":"pradeep"}' \
-                > $(Pipeline.Workspace)/tfplan/ci.tfvars
+              # Same ci.tfvars content as CI
+              echo 'tags = {"env":"dev","owner":"pradeep"}' > $(Pipeline.Workspace)/tfplan/ci.tfvars
 
-              echo "Previewing plan changes:"
+              echo "Showing plan summary:"
               jq '.resource_changes[]? | {type:.type, name:.name, action:.change.actions}' \
                  $(Pipeline.Workspace)/tfplan_json/tfplan.json || true
-            displayName: 'Prepare TF_VARs and preview plan'
+            displayName: "Recreate TF vars & preview"
 
-          # Perform Terraform apply using downloaded binary plan
+          # Apply using the downloaded plan
           - script: |
               cd $(Pipeline.Workspace)/tfplan
 
               terraform init -input=false
+
+              echo "Applying Terraform plan..."
               terraform apply -input=false tfplan.binary
-            displayName: 'terraform apply'
+            displayName: "Terraform Apply"
             env:
               TF_IN_AUTOMATION: "1"
