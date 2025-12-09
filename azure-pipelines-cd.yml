@@ -26,51 +26,44 @@ stages:
         deploy:
           steps:
 
+          ############################################
           # Install Terraform
+          ############################################
           - task: TerraformInstaller@1
             displayName: 'Install Terraform'
             inputs:
               terraformVersion: '1.5.7'
 
+          ############################################
           # Azure login
+          ############################################
           - task: AzureCLI@2
             displayName: 'Azure Login'
             inputs:
               azureSubscription: 'pradeep-last-sc'
               scriptType: bash
               scriptLocation: inlineScript
-              inlineScript: az account show
+              inlineScript: |
+                echo "Logged into Azure:"
+                az account show
 
           ############################################
-          # DOWNLOAD FULL TERRAFORM CONFIGURATION    #
+          # Download full terraform configuration from CI
           ############################################
-
           - task: DownloadPipelineArtifact@2
-            displayName: "Download Terraform configuration"
+            displayName: 'Download terraform folder'
             inputs:
-              buildType: "specific"
-              project: "$(System.TeamProjectId)"
-              pipeline: "$(resources.pipeline.ciPipeline.pipelineId)"
-              runVersion: "specific"
-              runId: "$(resources.pipeline.ciPipeline.runId)"
-              artifact: "terraform"        # This must be published from CI
-              path: "$(Pipeline.Workspace)/terraform"
-
-          - task: DownloadPipelineArtifact@2
-            displayName: "Download tfplan binary"
-            inputs:
-              buildType: "specific"
-              project: "$(System.TeamProjectId)"
-              pipeline: "$(resources.pipeline.ciPipeline.pipelineId)"
-              runVersion: "specific"
-              runId: "$(resources.pipeline.ciPipeline.runId)"
-              artifact: "tfplan"
-              path: "$(Pipeline.Workspace)/tfplan"
+              buildType: 'specific'
+              project: '$(System.TeamProjectId)'
+              pipeline: '$(resources.pipeline.ciPipeline.pipelineId)'
+              runVersion: 'specific'
+              runId: '$(resources.pipeline.ciPipeline.runId)'
+              artifact: 'terraform'
+              path: '$(Pipeline.Workspace)/terraform'
 
           ############################################
-          # RECREATE TF VARIABLES                     #
+          # Recreate TF_VARs (optional, if needed)
           ############################################
-
           - script: |
               echo "Setting Terraform variables..."
               export TF_VAR_resource_group_name="pradeep-rg"
@@ -80,20 +73,16 @@ stages:
               export TF_VAR_app_service_plan_size="S1"
               export TF_VAR_app_service_name="pradeep-app"
               export TF_VAR_linux_fx_version="DOTNETCORE|7.0"
-
-              # ci.tfvars
-              echo 'tags = {"env":"dev","owner":"pradeep"}' > $(Pipeline.Workspace)/terraform/ci.tfvars
-            displayName: "Set TF_VARs"
+            displayName: 'Set TF_VARs'
 
           ############################################
-          # APPLY TERRAFORM PLAN                      #
+          # Apply the Terraform plan
           ############################################
-
           - script: |
               cd $(Pipeline.Workspace)/terraform
               terraform init -input=false
               echo "Applying Terraform plan..."
-              terraform apply -input=false $(Pipeline.Workspace)/tfplan/tfplan.binary
-            displayName: "Terraform Apply"
+              terraform apply -input=false tfplan.binary
+            displayName: 'Terraform Apply'
             env:
-              TF_IN_AUTOMATION: "1"
+              TF_IN_AUTOMATION: '1'
