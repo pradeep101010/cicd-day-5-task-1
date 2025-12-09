@@ -4,13 +4,13 @@ pr: none
 stages:
 - stage: Deploy
   displayName: CD - Deploy Terraform Plan
-
   jobs:
   - deployment: ApplyPlan
     displayName: Apply Terraform Plan
-    environment: 'dev-env'
+    environment:
+      name: 'dev-env'
     pool:
-      name: 'pradeep-pool'   # your self-hosted agent
+      name: 'pradeep-pool'
     strategy:
       runOnce:
         deploy:
@@ -22,7 +22,7 @@ stages:
             inputs:
               terraformVersion: '1.5.7'
 
-          # Download terraform folder artifact from specific CI build
+          # Download terraform folder artifact from CI
           - task: DownloadPipelineArtifact@2
             displayName: 'Download terraform folder'
             inputs:
@@ -30,74 +30,60 @@ stages:
               project: '$(System.TeamProjectId)'
               pipeline: 'pradeep101010.pradeep-new-cicd-pipeline'
               runVersion: 'specific'
-              runId: '117'                            # Numeric CI run ID
+              runId: '117'   # CI run ID
               artifact: 'terraform'
               path: '$(Pipeline.Workspace)/terraform'
 
-          # Download Terraform plan artifacts from CI
-          - task: DownloadPipelineArtifact@2
-            displayName: 'Download tfplan binary artifact'
-            inputs:
-              buildType: 'specific'
-              project: '$(System.TeamProjectId)'
-              pipeline: 'pradeep101010.pradeep-new-cicd-pipeline'
-              runVersion: 'specific'
-              runId: '117'
-              artifact: 'tfplan'
-              path: '$(Pipeline.Workspace)/tfplan'
-
-          - task: DownloadPipelineArtifact@2
-            displayName: 'Download tfplan JSON artifact'
-            inputs:
-              buildType: 'specific'
-              project: '$(System.TeamProjectId)'
-              pipeline: 'pradeep101010.pradeep-new-cicd-pipeline'
-              runVersion: 'specific'
-              runId: '117'
-              artifact: 'tfplan_json'
-              path: '$(Pipeline.Workspace)/tfplan_json'
-
           # Set Managed Identity environment variables + TF_VARs
-          - script: |
-              echo "Exporting MSI environment variables for Terraform..."
-              export ARM_USE_MSI=true
-              export ARM_MSI_CLIENT_ID=eca641d4-4893-44d1-9958-99febd55485b
-              export ARM_SUBSCRIPTION_ID=145ccdc1-6c51-4e45-a04e-21bdea03d170
-              export ARM_TENANT_ID=2a731c61-a2b2-4661-8409-5b861cf40d0c
-
-              echo "Exporting TF_VARs..."
-              export TF_VAR_resource_group_name="pradeep-rg-auto"
-              export TF_VAR_location="eastus"
-              export TF_VAR_app_service_plan_name="pradeep-plan"
-              export TF_VAR_app_service_plan_tier="Standard"
-              export TF_VAR_app_service_plan_size="S1"
-              export TF_VAR_app_service_name="pradeep-app"
-              export TF_VAR_linux_fx_version="DOTNETCORE|7.0"
-
-              echo 'tags = {"env":"dev","owner":"pradeep"}' > $(Pipeline.Workspace)/terraform/ci.tfvars
+          - task: CmdLine@2
             displayName: 'Set environment variables (MSI + TF_VARs)'
             env:
               TF_IN_AUTOMATION: '1'
+            inputs:
+              script: |
+                echo "Exporting MSI environment variables for Terraform..."
+                export ARM_USE_MSI=true
+                export ARM_MSI_CLIENT_ID=eca641d4-4893-44d1-9958-99febd55485b
+                export ARM_SUBSCRIPTION_ID=145ccdc1-6c51-4e45-a04e-21bdea03d170
+                export ARM_TENANT_ID=2a731c61-a2b2-4661-8409-5b861cf40d0c
+
+                echo "Exporting TF_VARs..."
+                export TF_VAR_resource_group_name="pradeep-rg-auto"
+                export TF_VAR_location="eastus"
+                export TF_VAR_app_service_plan_name="pradeep-plan"
+                export TF_VAR_app_service_plan_tier="Standard"
+                export TF_VAR_app_service_plan_size="S1"
+                export TF_VAR_app_service_name="pradeep-app"
+                export TF_VAR_linux_fx_version="DOTNETCORE|7.0"
+
+                echo 'tags = {"env":"dev","owner":"pradeep"}' > $(Pipeline.Workspace)/terraform/ci.tfvars
 
           # Fix permissions for provider binaries
-          - script: |
-              echo "Fixing Terraform provider permissions..."
-              chmod -R +x $(Pipeline.Workspace)/terraform/.terraform/providers/
+          - task: CmdLine@2
             displayName: 'Fix Terraform provider permissions'
+            inputs:
+              script: |
+                echo "Fixing Terraform provider permissions..."
+                chmod -R +x $(Pipeline.Workspace)/terraform/.terraform/providers/
 
-          # Terraform init & apply using MSI (fixed)
-          - script: |
-              cd $(Pipeline.Workspace)/terraform
-
-              echo "Initializing Terraform..."
-              terraform init -input=false -upgrade
-
-              echo "Applying Terraform plan..."
-              terraform apply -input=false tfplan.binary
-            displayName: 'Terraform Apply via MSI'
+          # Terraform plan & apply (fresh)
+          - task: CmdLine@2
+            displayName: 'Terraform Plan & Apply via MSI'
             env:
               TF_IN_AUTOMATION: '1'
               ARM_USE_MSI: true
               ARM_MSI_CLIENT_ID: eca641d4-4893-44d1-9958-99febd55485b
               ARM_SUBSCRIPTION_ID: 145ccdc1-6c51-4e45-a04e-21bdea03d170
               ARM_TENANT_ID: 2a731c61-a2b2-4661-8409-5b861cf40d0c
+            inputs:
+              script: |
+                cd $(Pipeline.Workspace)/terraform
+
+                echo "Initializing Terraform..."
+                terraform init -input=false -upgrade
+
+                echo "Creating a fresh Terraform plan..."
+                terraform plan -out=tfplan.binary -var-file=ci.tfvars
+
+                echo "Applying the fresh Terraform plan..."
+                terraform apply -input=false tfplan.binary
