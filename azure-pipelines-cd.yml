@@ -50,11 +50,11 @@ stages:
               chmod -R +x $(Pipeline.Workspace)/terraform/.terraform/providers/
             displayName: 'Fix Terraform provider permissions'
 
-          # Terraform Apply using Azure Service Principal environment variables
+          # Terraform init & apply inside AzureCLI task
           - task: AzureCLI@2
             displayName: 'Terraform Apply'
             inputs:
-              azureSubscription: 'pradeep-last-sc'
+              azureSubscription: 'pradeep-last-sc'   # This is your Azure service connection
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
