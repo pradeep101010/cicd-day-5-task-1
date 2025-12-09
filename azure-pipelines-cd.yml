@@ -34,39 +34,27 @@ stages:
               artifact: 'terraform'
               path: '$(Pipeline.Workspace)/terraform'
 
-          # Set Managed Identity environment variables + TF_VARs
+          # Set Managed Identity environment variables
           - task: CmdLine@2
-            displayName: 'Set environment variables (MSI + TF_VARs)'
+            displayName: 'Set MSI environment variables'
             env:
               TF_IN_AUTOMATION: '1'
+              ARM_USE_MSI: true
+              ARM_MSI_CLIENT_ID: eca641d4-4893-44d1-9958-99febd55485b
+              ARM_SUBSCRIPTION_ID: 145ccdc1-6c51-4e45-a04e-21bdea03d170
+              ARM_TENANT_ID: 2a731c61-a2b2-4661-8409-5b861cf40d0c
             inputs:
               script: |
-                echo "Exporting MSI environment variables for Terraform..."
-                export ARM_USE_MSI=true
-                export ARM_MSI_CLIENT_ID=eca641d4-4893-44d1-9958-99febd55485b
-                export ARM_SUBSCRIPTION_ID=145ccdc1-6c51-4e45-a04e-21bdea03d170
-                export ARM_TENANT_ID=2a731c61-a2b2-4661-8409-5b861cf40d0c
-
-                echo "Exporting TF_VARs..."
-                export TF_VAR_resource_group_name="pradeep-rg-auto"
-                export TF_VAR_location="eastus"
-                export TF_VAR_app_service_plan_name="pradeep-plan"
-                export TF_VAR_app_service_plan_tier="Standard"
-                export TF_VAR_app_service_plan_size="S1"
-                export TF_VAR_app_service_name="pradeep-app"
-                export TF_VAR_linux_fx_version="DOTNETCORE|7.0"
-
-                echo 'tags = {"env":"dev","owner":"pradeep"}' > $(Pipeline.Workspace)/terraform/ci.tfvars
+                echo "MSI environment variables set."
 
           # Fix permissions for provider binaries
           - task: CmdLine@2
             displayName: 'Fix Terraform provider permissions'
             inputs:
               script: |
-                echo "Fixing Terraform provider permissions..."
                 chmod -R +x $(Pipeline.Workspace)/terraform/.terraform/providers/
 
-          # Terraform plan & apply (fresh)
+          # Terraform plan & apply (fresh, all variables inline)
           - task: CmdLine@2
             displayName: 'Terraform Plan & Apply via MSI'
             env:
@@ -83,7 +71,15 @@ stages:
                 terraform init -input=false -upgrade
 
                 echo "Creating a fresh Terraform plan..."
-                terraform plan -out=tfplan.binary -var-file=ci.tfvars
+                terraform plan -out=tfplan.binary \
+                  -var="resource_group_name=pradeep-rg-auto" \
+                  -var="location=eastus" \
+                  -var="app_service_plan_name=pradeep-plan" \
+                  -var="app_service_plan_tier=Standard" \
+                  -var="app_service_plan_size=S1" \
+                  -var="app_service_name=pradeep-app" \
+                  -var="linux_fx_version=DOTNETCORE|7.0" \
+                  -var='tags={"env":"dev","owner":"pradeep"}'
 
                 echo "Applying the fresh Terraform plan..."
                 terraform apply -input=false tfplan.binary
