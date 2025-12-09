@@ -30,7 +30,7 @@ stages:
               project: '$(System.TeamProjectId)'
               pipeline: 'pradeep101010.pradeep-new-cicd-pipeline'
               runVersion: 'specific'
-              runId: '117'   # CI run ID
+              runId: '130'   # CI run ID
               artifact: 'terraform'
               path: '$(Pipeline.Workspace)/terraform'
 
