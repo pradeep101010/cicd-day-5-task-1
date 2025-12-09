@@ -22,18 +22,17 @@ stages:
             inputs:
               terraformVersion: '1.5.7'
 
-          # Download terraform folder & plan artifacts from CI
+          # Download latest terraform folder artifact from CI
           - task: DownloadPipelineArtifact@2
             displayName: 'Download terraform folder'
             inputs:
-              buildType: 'specific'
+              buildType: 'latest'
               project: '$(System.TeamProjectId)'
               pipeline: 'pradeep-new-cicd-pipeline'
-              runVersion: 'specific'
-              runId: '$(resources.pipeline.ciPipeline.runId)'
               artifact: 'terraform'
               path: '$(Pipeline.Workspace)/terraform'
 
+          # Download Terraform plan artifacts from CI
           - download: current
             artifact: tfplan
             displayName: 'Download tfplan binary artifact'
@@ -42,7 +41,7 @@ stages:
             artifact: tfplan_json
             displayName: 'Download tfplan JSON artifact'
 
-          # Set Managed Identity environment variables
+          # Set Managed Identity environment variables + TF_VARs
           - script: |
               echo "Exporting MSI environment variables for Terraform..."
               export ARM_USE_MSI=true
@@ -50,7 +49,7 @@ stages:
               export ARM_SUBSCRIPTION_ID=145ccdc1-6c51-4e45-a04e-21bdea03d170
               export ARM_TENANT_ID=2a731c61-a2b2-4661-8409-5b861cf40d0c
 
-              # Export TF_VARs
+              echo "Exporting TF_VARs..."
               export TF_VAR_resource_group_name="pradeep-rg"
               export TF_VAR_location="eastus"
               export TF_VAR_app_service_plan_name="pradeep-plan"
