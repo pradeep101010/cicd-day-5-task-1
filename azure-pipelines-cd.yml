@@ -22,25 +22,40 @@ stages:
             inputs:
               terraformVersion: '1.5.7'
 
-          # Download terraform folder artifact from latest CI run
+          # Download terraform folder artifact from specific CI build
           - task: DownloadPipelineArtifact@2
             displayName: 'Download terraform folder'
             inputs:
-              buildType: 'specific'                  # fixed
+              buildType: 'specific'                             # use specific build
               project: '$(System.TeamProjectId)'
               pipeline: 'pradeep101010.pradeep-new-cicd-pipeline'
-              runVersion: 'latest'                   # fetch latest successful run
+              runVersion: 'specific'
+              runId: '122'                                      # <-- numeric runId of ci-20251209-.21
               artifact: 'terraform'
               path: '$(Pipeline.Workspace)/terraform'
 
           # Download Terraform plan artifacts from CI
-          - download: current
-            artifact: tfplan
+          - task: DownloadPipelineArtifact@2
             displayName: 'Download tfplan binary artifact'
+            inputs:
+              buildType: 'specific'
+              project: '$(System.TeamProjectId)'
+              pipeline: 'pradeep101010.pradeep-new-cicd-pipeline'
+              runVersion: 'specific'
+              runId: '122'
+              artifact: 'tfplan'
+              path: '$(Pipeline.Workspace)/tfplan'
 
-          - download: current
-            artifact: tfplan_json
+          - task: DownloadPipelineArtifact@2
             displayName: 'Download tfplan JSON artifact'
+            inputs:
+              buildType: 'specific'
+              project: '$(System.TeamProjectId)'
+              pipeline: 'pradeep101010.pradeep-new-cicd-pipeline'
+              runVersion: 'specific'
+              runId: '122'
+              artifact: 'tfplan_json'
+              path: '$(Pipeline.Workspace)/tfplan_json'
 
           # Set Managed Identity environment variables + TF_VARs
           - script: |
