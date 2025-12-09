@@ -62,20 +62,6 @@ stages:
               path: '$(Pipeline.Workspace)/terraform'
 
           ############################################
-          # Recreate TF_VARs
-          ############################################
-          - script: |
-              echo "Setting Terraform variables..."
-              export TF_VAR_resource_group_name="pradeep-rg"
-              export TF_VAR_location="eastus"
-              export TF_VAR_app_service_plan_name="pradeep-plan"
-              export TF_VAR_app_service_plan_tier="Standard"
-              export TF_VAR_app_service_plan_size="S1"
-              export TF_VAR_app_service_name="pradeep-app"
-              export TF_VAR_linux_fx_version="DOTNETCORE|7.0"
-            displayName: 'Set TF_VARs'
-
-          ############################################
           # Fix permissions for provider binaries
           ############################################
           - script: |
@@ -84,26 +70,16 @@ stages:
             displayName: 'Fix Terraform provider permissions'
 
           ############################################
-          # Initialize Terraform and create plan in CD
+          # Apply Terraform plan
           ############################################
           - script: |
               cd $(Pipeline.Workspace)/terraform
+
               echo "Initializing Terraform..."
               terraform init -input=false -upgrade
-              echo "Creating Terraform plan..."
-              terraform plan -input=false -var-file=ci.tfvars -out=tfplan_cd.binary
-              terraform show -json tfplan_cd.binary > tfplan_cd.json
-            displayName: 'Terraform Init & Plan in CD'
-            env:
-              TF_IN_AUTOMATION: '1'
 
-          ############################################
-          # Apply Terraform plan created in CD
-          ############################################
-          - script: |
-              cd $(Pipeline.Workspace)/terraform
-              echo "Applying Terraform plan..."
-              terraform apply -input=false tfplan_cd.binary
-            displayName: 'Terraform Apply in CD'
+              echo "Applying Terraform plan with ci.tfvars..."
+              terraform apply -input=false -var-file=ci.tfvars
+            displayName: 'Terraform Apply'
             env:
               TF_IN_AUTOMATION: '1'
