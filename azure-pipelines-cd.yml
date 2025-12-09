@@ -22,13 +22,14 @@ stages:
             inputs:
               terraformVersion: '1.5.7'
 
-          # Download latest terraform folder artifact from CI
+          # Download terraform folder artifact from latest CI run
           - task: DownloadPipelineArtifact@2
             displayName: 'Download terraform folder'
             inputs:
-              buildType: 'latest'
+              buildType: 'specific'                  # fixed
               project: '$(System.TeamProjectId)'
               pipeline: 'pradeep-new-cicd-pipeline'
+              runVersion: 'latest'                   # fetch latest successful run
               artifact: 'terraform'
               path: '$(Pipeline.Workspace)/terraform'
 
