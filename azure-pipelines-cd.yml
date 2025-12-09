@@ -62,7 +62,7 @@ stages:
               path: '$(Pipeline.Workspace)/terraform'
 
           ############################################
-          # Recreate TF_VARs (optional)
+          # Recreate TF_VARs
           ############################################
           - script: |
               echo "Setting Terraform variables..."
@@ -84,13 +84,26 @@ stages:
             displayName: 'Fix Terraform provider permissions'
 
           ############################################
-          # Apply the Terraform plan
+          # Initialize Terraform and create plan in CD
           ############################################
           - script: |
               cd $(Pipeline.Workspace)/terraform
-              terraform init -input=false
+              echo "Initializing Terraform..."
+              terraform init -input=false -upgrade
+              echo "Creating Terraform plan..."
+              terraform plan -input=false -var-file=ci.tfvars -out=tfplan_cd.binary
+              terraform show -json tfplan_cd.binary > tfplan_cd.json
+            displayName: 'Terraform Init & Plan in CD'
+            env:
+              TF_IN_AUTOMATION: '1'
+
+          ############################################
+          # Apply Terraform plan created in CD
+          ############################################
+          - script: |
+              cd $(Pipeline.Workspace)/terraform
               echo "Applying Terraform plan..."
-              terraform apply -input=false tfplan.binary
-            displayName: 'Terraform Apply'
+              terraform apply -input=false tfplan_cd.binary
+            displayName: 'Terraform Apply in CD'
             env:
               TF_IN_AUTOMATION: '1'
