@@ -35,7 +35,7 @@ stages:
               terraformVersion: '1.5.7'
 
           ############################################
-          # Azure login
+          # Azure login using service connection
           ############################################
           - task: AzureCLI@2
             displayName: 'Azure Login'
@@ -43,12 +43,13 @@ stages:
               azureSubscription: 'pradeep-last-sc'
               scriptType: bash
               scriptLocation: inlineScript
+              useAzLogin: true
               inlineScript: |
-                echo "Logged into Azure:"
+                echo "Logged into Azure via service connection"
                 az account show
 
           ############################################
-          # Download full terraform configuration from CI
+          # Download full terraform folder from CI
           ############################################
           - task: DownloadPipelineArtifact@2
             displayName: 'Download terraform folder'
@@ -70,7 +71,7 @@ stages:
             displayName: 'Fix Terraform provider permissions'
 
           ############################################
-          # Apply Terraform plan with hardcoded variables
+          # Apply the Terraform plan with hardcoded values
           ############################################
           - script: |
               cd $(Pipeline.Workspace)/terraform
