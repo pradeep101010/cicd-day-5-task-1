@@ -72,7 +72,7 @@ stages:
 
                 echo "Creating a fresh Terraform plan..."
                 terraform plan -out=tfplan.binary \
-                  -var="resource_group_name=pradeep-rg-auto" \
+                  -var="resource_group_name=pradeep-rg" \
                   -var="location=eastus" \
                   -var="app_service_plan_name=pradeep-plan" \
                   -var="app_service_plan_tier=Standard" \
