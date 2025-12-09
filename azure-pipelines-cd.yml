@@ -10,7 +10,7 @@ stages:
     displayName: Apply Terraform Plan
     environment: 'dev-env'
     pool:
-      name: 'pradeep-pool'   # self-hosted agent
+      name: 'pradeep-pool'   # your self-hosted agent
     strategy:
       runOnce:
         deploy:
@@ -22,43 +22,42 @@ stages:
             inputs:
               terraformVersion: '1.5.7'
 
-          # Download terraform folder artifact from CI run 'ci-20251209-.21'
+          # Download terraform folder artifact from specific CI build
           - task: DownloadPipelineArtifact@2
             displayName: 'Download terraform folder'
             inputs:
-              buildType: 'specific'
+              buildType: 'specific'                
               project: '$(System.TeamProjectId)'
               pipeline: 'pradeep101010.pradeep-new-cicd-pipeline'
-              buildVersionToDownload: 'specific'
-              buildId: 'ci-20251209-.21'      # Use CI run name here
+              runVersion: 'specific'
+              runId: '117'                            # Numeric CI run ID
               artifact: 'terraform'
               path: '$(Pipeline.Workspace)/terraform'
 
-          # Download tfplan artifact
+          # Download Terraform plan artifacts from CI
           - task: DownloadPipelineArtifact@2
             displayName: 'Download tfplan binary artifact'
             inputs:
               buildType: 'specific'
               project: '$(System.TeamProjectId)'
               pipeline: 'pradeep101010.pradeep-new-cicd-pipeline'
-              buildVersionToDownload: 'specific'
-              buildId: 'ci-20251209-.21'
+              runVersion: 'specific'
+              runId: '117'
               artifact: 'tfplan'
               path: '$(Pipeline.Workspace)/tfplan'
 
-          # Download tfplan JSON artifact
           - task: DownloadPipelineArtifact@2
             displayName: 'Download tfplan JSON artifact'
             inputs:
               buildType: 'specific'
               project: '$(System.TeamProjectId)'
               pipeline: 'pradeep101010.pradeep-new-cicd-pipeline'
-              buildVersionToDownload: 'specific'
-              buildId: 'ci-20251209-.21'
+              runVersion: 'specific'
+              runId: '117'
               artifact: 'tfplan_json'
               path: '$(Pipeline.Workspace)/tfplan_json'
 
-          # Set MSI environment variables + TF_VARs
+          # Set Managed Identity environment variables + TF_VARs
           - script: |
               echo "Exporting MSI environment variables for Terraform..."
               export ARM_USE_MSI=true
@@ -80,7 +79,7 @@ stages:
             env:
               TF_IN_AUTOMATION: '1'
 
-          # Fix provider permissions
+          # Fix permissions for provider binaries
           - script: |
               echo "Fixing Terraform provider permissions..."
               chmod -R +x $(Pipeline.Workspace)/terraform/.terraform/providers/
