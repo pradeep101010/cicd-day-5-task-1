@@ -48,7 +48,7 @@ stages:
                 az account show
 
           ############################################
-          # Download full terraform folder from CI
+          # Download full terraform configuration from CI
           ############################################
           - task: DownloadPipelineArtifact@2
             displayName: 'Download terraform folder'
@@ -70,7 +70,7 @@ stages:
             displayName: 'Fix Terraform provider permissions'
 
           ############################################
-          # Apply Terraform plan
+          # Apply Terraform plan with hardcoded variables
           ############################################
           - script: |
               cd $(Pipeline.Workspace)/terraform
@@ -78,8 +78,15 @@ stages:
               echo "Initializing Terraform..."
               terraform init -input=false -upgrade
 
-              echo "Applying Terraform plan using ci.tfvars..."
-              terraform apply -input=false -var-file=ci.tfvars
+              echo "Applying Terraform plan with hardcoded values..."
+              terraform apply -input=false \
+                -var="resource_group_name=pradeep-rg" \
+                -var="location=eastus" \
+                -var="app_service_plan_name=pradeep-plan" \
+                -var="app_service_plan_tier=Standard" \
+                -var="app_service_plan_size=S1" \
+                -var="app_service_name=pradeep-app" \
+                -var="linux_fx_version=DOTNETCORE|7.0"
             displayName: 'Terraform Apply'
             env:
               TF_IN_AUTOMATION: '1'
