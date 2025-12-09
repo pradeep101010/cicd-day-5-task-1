@@ -1,6 +1,16 @@
 trigger: none
 pr: none
 
+resources:
+  pipelines:
+    - pipeline: ciPipeline          
+      source: pradeep101010.pradeep-new-cicd-pipeline
+      trigger:
+        branches:
+          include:
+            - main
+            - develop
+
 stages:
 - stage: Terraform_CD
   displayName: CD - Apply Terraform Plan
@@ -33,18 +43,49 @@ stages:
                 echo "Logged into Azure:"
                 az account show
 
-          # Download artifacts created in CI
-          - download: current
-            artifact: tfplan
-            displayName: 'Download binary plan'
+          ############################################
+          # DOWNLOAD ARTIFACTS FROM CI PIPELINE RUN #
+          ############################################
 
-          - download: current
-            artifact: tfplan_json
-            displayName: 'Download JSON plan'
+          - task: DownloadPipelineArtifact@2
+            displayName: "Download tfplan binary"
+            inputs:
+              buildType: "specific"
+              project: "$(System.TeamProjectId)"
+              pipeline: "$(resources.pipeline.ciPipeline.pipelineId)"
+              runVersion: "specific"
+              runId: "$(resources.pipeline.ciPipeline.runId)"
+              artifact: "tfplan"
+              path: "$(Pipeline.Workspace)/tfplan"
 
-          # Recreate same TF_VARs used in CI
+          - task: DownloadPipelineArtifact@2
+            displayName: "Download plan json"
+            inputs:
+              buildType: "specific"
+              project: "$(System.TeamProjectId)"
+              pipeline: "$(resources.pipeline.ciPipeline.pipelineId)"
+              runVersion: "specific"
+              runId: "$(resources.pipeline.ciPipeline.runId)"
+              artifact: "tfplan_json"
+              path: "$(Pipeline.Workspace)/tfplan_json"
+
+          - task: DownloadPipelineArtifact@2
+            displayName: "Download plan log"
+            inputs:
+              buildType: "specific"
+              project: "$(System.TeamProjectId)"
+              pipeline: "$(resources.pipeline.ciPipeline.pipelineId)"
+              runVersion: "specific"
+              runId: "$(resources.pipeline.ciPipeline.runId)"
+              artifact: "planlog"
+              path: "$(Pipeline.Workspace)/planlog"
+
+          ############################################
+          # RECREATE TF VARIABLES USED IN CI         #
+          ############################################
+
           - script: |
-              echo "Recreating CI Terraform variables..."
+              echo "Recreating Terraform variables used in CI..."
 
               export TF_VAR_resource_group_name="pradeep-rg"
               export TF_VAR_location="eastus"
@@ -54,20 +95,21 @@ stages:
               export TF_VAR_app_service_name="pradeep-app"
               export TF_VAR_linux_fx_version="DOTNETCORE|7.0"
 
-              # Same ci.tfvars content as CI
+              # Recreate ci.tfvars
               echo 'tags = {"env":"dev","owner":"pradeep"}' > $(Pipeline.Workspace)/tfplan/ci.tfvars
 
-              echo "Showing plan summary:"
+              echo "Previewing plan changes..."
               jq '.resource_changes[]? | {type:.type, name:.name, action:.change.actions}' \
                  $(Pipeline.Workspace)/tfplan_json/tfplan.json || true
-            displayName: "Recreate TF vars & preview"
+            displayName: "Recreate TF vars & preview plan"
 
-          # Apply using the downloaded plan
+          ############################################
+          # APPLY TERRAFORM PLAN                      #
+          ############################################
+
           - script: |
               cd $(Pipeline.Workspace)/tfplan
-
               terraform init -input=false
-
               echo "Applying Terraform plan..."
               terraform apply -input=false tfplan.binary
             displayName: "Terraform Apply"
