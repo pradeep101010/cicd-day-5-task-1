@@ -16,8 +16,8 @@ stages:
         deploy:
           steps:
 
-          # Install Terraform
-          - task: HashiCorpInstall@0
+          # Install Terraform (same as CI)
+          - task: TerraformInstaller@1
             displayName: 'Install Terraform'
             inputs:
               terraformVersion: '1.5.7'
@@ -54,9 +54,10 @@ stages:
               export TF_VAR_app_service_name="pradeep-app"
               export TF_VAR_linux_fx_version="DOTNETCORE|7.0"
 
-              echo 'tags = {"env":"dev","owner":"pradeep"}' > $(Pipeline.Workspace)/tfplan/ci.tfvars
+              echo 'tags = {"env":"dev","owner":"pradeep"}' \
+                > $(Pipeline.Workspace)/tfplan/ci.tfvars
 
-              echo "Previewing changes:"
+              echo "Previewing plan changes:"
               jq '.resource_changes[]? | {type:.type, name:.name, action:.change.actions}' \
                  $(Pipeline.Workspace)/tfplan_json/tfplan.json || true
             displayName: 'Prepare TF_VARs and preview plan'
