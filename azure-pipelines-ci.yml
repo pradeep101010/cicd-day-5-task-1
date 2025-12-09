@@ -1,62 +1,72 @@
-trigger:
-- main
-
-variables:
-  location: 'East US'
-  environment: 'dev'
-  rg_name: '$(environment)-rg'
-  app_service_plan_name: '$(environment)-asp'
-  app_service_tier: 'Standard'
-  app_service_size: 'S1'
-  app_service_name: '$(environment)-app'
+trigger: none
+pr: none
 
 stages:
-- stage: Terraform_CI
-  displayName: 'Terraform CI'
+- stage: Deploy
+  displayName: CD - Deploy Terraform Plan
   jobs:
-  - job: Terraform
-    displayName: 'Terraform Init, Format, Validate, Plan'
+  - deployment: ApplyPlan
+    displayName: Apply Terraform Plan
+    environment: 'dev-env'     # static since you're hardcoding anyway
     pool:
       vmImage: 'ubuntu-latest'
-    steps:
-    - task: UsePythonVersion@0
-      inputs:
-        versionSpec: '3.x'
 
-    - script: |
-        curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-        sudo apt-add-repository "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
-        sudo apt-get update && sudo apt-get install terraform -y
-      displayName: 'Install Terraform'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
 
-    - task: AzureCLI@2
-      inputs:
-        azureSubscription: '<YOUR_SERVICE_CONNECTION>'
-        scriptType: bash
-        scriptLocation: inlineScript
-        inlineScript: |
-          echo "Azure login successful"
-      displayName: 'Azure Login'
+          # Install Terraform
+          - task: HashiCorpInstall@0
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: '1.5.7'
 
-    - script: |
-        terraform init
-      displayName: 'Terraform Init'
+          # Login to Azure using SAME service connection as CI
+          - task: AzureCLI@2
+            displayName: 'Authenticate to Azure'
+            inputs:
+              azureSubscription: 'pradeep-last-sc'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                echo "Logged into Azure subscription:"
+                az account show
 
-    - script: |
-        terraform fmt -check
-      displayName: 'Terraform Format'
+          # Download plan artifacts generated in CI
+          - download: current
+            artifact: tfplan
+            displayName: 'Download tfplan artifact (binary)'
 
-    - script: |
-        if [ "$(environment)" = "prod" ]; then
-          terraform validate -json | jq -e '.diagnostics[] | select(.severity=="warning") | .summary' && exit 1 || terraform validate
-        else
-          terraform validate
-        fi
-      displayName: 'Terraform Validate'
+          - download: current
+            artifact: tfplan_json
+            displayName: 'Download tfplan JSON'
 
-    - script: |
-        terraform plan -out=tfplan
-      displayName: 'Terraform Plan'
+          # Preview plan + recreate TF Vars
+          - script: |
+              echo "Recreating TF_VARs..."
 
-    - publish: tfplan
-      artifact: terraform_plan
+              export TF_VAR_resource_group_name="pradeep-rg"
+              export TF_VAR_location="eastus"
+              export TF_VAR_app_service_plan_name="pradeep-plan"
+              export TF_VAR_app_service_plan_tier="Standard"
+              export TF_VAR_app_service_plan_size="S1"
+              export TF_VAR_app_service_name="pradeep-app"
+              export TF_VAR_linux_fx_version="DOTNETCORE|7.0"
+
+              echo 'tags = {"env":"dev","owner":"pradeep"}' > $(Pipeline.Workspace)/tfplan/ci.tfvars
+
+              echo "Previewing changes:"
+              jq '.resource_changes[]? | {type:.type, name:.name, action:.change.actions}' \
+                 $(Pipeline.Workspace)/tfplan_json/tfplan.json || true
+            displayName: 'Prepare TF_VARs and preview plan'
+
+          # Perform Terraform apply using downloaded binary plan
+          - script: |
+              cd $(Pipeline.Workspace)/tfplan
+
+              terraform init -input=false
+              terraform apply -input=false tfplan.binary
+            displayName: 'terraform apply'
+            env:
+              TF_IN_AUTOMATION: "1"
