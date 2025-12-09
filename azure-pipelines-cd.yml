@@ -1,34 +1,73 @@
 trigger: none
+pr: none
 
 stages:
-- stage: Terraform_CD
-  displayName: 'Terraform CD'
+- stage: Deploy
+  displayName: CD - Deploy Terraform Plan
   jobs:
-  - deployment: Deploy
-    displayName: 'Deploy Terraform Resources'
-    environment: '$(environment)'
+  - deployment: ApplyPlan
+    displayName: Apply Terraform Plan
+    environment: 'dev-env'     # static since you're hardcoding anyway
     pool:
       vmImage: 'ubuntu-latest'
+
     strategy:
       runOnce:
         deploy:
           steps:
-          - download: current
-            artifact: terraform_plan
 
-          - task: AzureCLI@2
+          # Install Terraform (same as CI)
+          - task: TerraformInstaller@1
+            displayName: 'Install Terraform'
             inputs:
-              azureSubscription: '<YOUR_SERVICE_CONNECTION>'
+              terraformVersion: '1.5.7'
+
+          # Login to Azure using SAME service connection as CI
+          - task: AzureCLI@2
+            displayName: 'Authenticate to Azure'
+            inputs:
+              azureSubscription: 'pradeep-last-sc'
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
-                echo "Azure login successful"
+                echo "Logged into Azure subscription:"
+                az account show
 
-          - task: ManualValidation@0
-            inputs:
-              notifyUsers: '<YOUR_EMAIL>'
-              instructions: 'Approve to deploy Terraform plan'
+          # Download plan artifacts generated in CI
+          - download: current
+            artifact: tfplan
+            displayName: 'Download tfplan artifact (binary)'
 
+          - download: current
+            artifact: tfplan_json
+            displayName: 'Download tfplan JSON'
+
+          # Preview plan + recreate TF Vars
           - script: |
-              terraform apply -auto-approve tfplan
-            displayName: 'Terraform Apply'
+              echo "Recreating TF_VARs..."
+
+              export TF_VAR_resource_group_name="pradeep-rg"
+              export TF_VAR_location="eastus"
+              export TF_VAR_app_service_plan_name="pradeep-plan"
+              export TF_VAR_app_service_plan_tier="Standard"
+              export TF_VAR_app_service_plan_size="S1"
+              export TF_VAR_app_service_name="pradeep-app"
+              export TF_VAR_linux_fx_version="DOTNETCORE|7.0"
+
+              echo 'tags = {"env":"dev","owner":"pradeep"}' \
+                > $(Pipeline.Workspace)/tfplan/ci.tfvars
+
+              echo "Previewing plan changes:"
+              jq '.resource_changes[]? | {type:.type, name:.name, action:.change.actions}' \
+                 $(Pipeline.Workspace)/tfplan_json/tfplan.json || true
+            displayName: 'Prepare TF_VARs and preview plan'
+
+          # Perform Terraform apply using downloaded binary plan
+          - script: |
+              cd $(Pipeline.Workspace)/tfplan
+
+              terraform init -input=false
+              terraform apply -input=false tfplan.binary
+            displayName: 'terraform apply'
+            env:
+              TF_IN_AUTOMATION: "1"
